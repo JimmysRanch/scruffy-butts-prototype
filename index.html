@@ -1,389 +1,427 @@
 <!doctype html>
 <html lang="en">
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Scruffy Butts</title>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Scruffy Butts</title>
 
-<style>
-  :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
-  body { margin: 0; background:#fff; color:#111; }
-  .container { max-width: 900px; margin: 24px auto; padding: 0 16px; }
-  .btn { padding:8px 12px; border:1px solid #ddd; border-radius:8px; background:#fff; cursor:pointer; }
-  .btn.active { background:#111; color:#fff; border-color:#111; }
-  .row { display:flex; gap:8px; flex-wrap:wrap; }
-  .card { border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#fff; }
-  label span { font-size:12px; color:#6b7280; display:block; margin-bottom:4px; }
-  select,input,textarea { border:1px solid #d1d5db; border-radius:8px; padding:8px; width:100%; }
-  h1 { font-size:32px; font-weight:800; margin:0 0 4px; }
-  h2 { font-size:22px; margin:16px 0 8px; }
-  small.muted { color:#6b7280; }
-  .list { display:grid; gap:8px; }
-  .pill { display:inline-block; font-size:12px; padding:2px 8px; border-radius:999px; border:1px solid #e5e7eb; }
-  canvas { background:#fff; width:100%; height:220px; border:1px solid #d1d5db; border-radius:12px; }
-</style>
+    <!-- PWA basics -->
+    <meta name="theme-color" content="#111111" />
+    <link rel="manifest" href="manifest.json" />
+    <!-- iOS PWA -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Scruffy Butts" />
+    <link rel="apple-touch-icon" href="icon-180.png" />
 
-<div class="container" id="app"></div>
+    <!-- Tailwind (CDN) for instant modern styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
 
-<script>
-  // ---------- tiny state (in-memory) ----------
-  const S = {
-    services: [],
-    employees: [],
-    clients: [],
-    pets: [],
-    appointments: [],
-    messages: [],
-    seeded: false
-  };
+    <style>
+      /* iOS safe area padding for the header */
+      .safe-top { padding-top: max(env(safe-area-inset-top), 12px); }
+    </style>
+  </head>
+  <body class="bg-white text-zinc-900">
+    <!-- Header -->
+    <header class="safe-top sticky top-0 z-10 bg-white/80 backdrop-blur border-b border-zinc-200">
+      <div class="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
+        <img src="icon-180.png" alt="" class="size-8 rounded-lg" />
+        <div>
+          <h1 class="font-extrabold text-xl leading-5">Scruffy Butts</h1>
+          <p class="text-xs text-zinc-500 -mt-0.5">Natalia, TX</p>
+        </div>
+      </div>
+    </header>
 
-  const uid = () => Math.random().toString(36).slice(2);
+    <!-- App Container -->
+    <main class="max-w-5xl mx-auto px-4 py-5">
+      <!-- Tabs -->
+      <nav id="tabs" class="flex flex-wrap gap-2 mb-4"></nav>
+      <!-- Screen -->
+      <section id="screen" class="grid gap-3"></section>
+    </main>
 
-  function seedIfNeeded(){
-    if (S.seeded) return;
-    S.services = [
-      { id: uid(), name: 'Bath & Brush', price: 35, duration: 45, pct: 40 },
-      { id: uid(), name: 'Full Groom (Small)', price: 65, duration: 75, pct: 50 },
-      { id: uid(), name: 'Full Groom (Medium)', price: 85, duration: 90, pct: 50 },
-      { id: uid(), name: 'Deshedding Add-on', price: 20, duration: 15, pct: 30 },
-    ];
-    S.employees = [
-      { id: uid(), name: 'Taylor', phone: '+12105550101', role:'stylist', pctDefault:50, schedule: {1:[9,17],3:[9,17],5:[9,15]} },
-      { id: uid(), name: 'Jordan', phone: '+12105550102', role:'stylist', pctDefault:45, schedule: {2:[10,18],4:[10,18]} },
-      { id: uid(), name: 'Alex (Admin)', phone: '+12105550103', role:'admin', pctDefault:0, schedule:{} },
-    ];
-    S.clients = [
-      { id: uid(), name: 'Jamie Lee', phone: '+12105550011', email: 'jamie@example.com' },
-      { id: uid(), name: 'Chris P.',  phone: '+12105550012' }
-    ];
-    S.pets = [
-      { id: uid(), clientId: S.clients[0].id, name: 'Buddy', breed:'Golden Retriever', notes:'Nervous at dryers' },
-      { id: uid(), clientId: S.clients[0].id, name: 'Milo',  breed:'Poodle Mix' },
-      { id: uid(), clientId: S.clients[1].id, name: 'Daisy', breed:'Yorkie' },
-    ];
-    const now = new Date(); now.setHours(10,0,0,0);
-    S.appointments = [{
-      id: uid(),
-      clientId: S.clients[0].id,
-      petId: S.pets[0].id,
-      serviceId: S.services[0].id,
-      employeeId: S.employees[0].id,
-      start: now.toISOString(),
-      end: new Date(now.getTime()+45*60000).toISOString(),
-      status: 'booked'
-    }];
-    S.messages = [{
-      id: uid(), from: '+1CLIENT', to: '+1SHOP', body: 'Hi! Can I book for Daisy on Fri at 10?', sentAt: new Date().toISOString()
-    }];
-    S.seeded = true;
-  }
+    <script>
+      /********** State with localStorage persistence **********/
+      const KEY = "sb_state_v1";
+      const S = load() || { services:[], employees:[], clients:[], pets:[], appointments:[], messages:[], seeded:false };
+      function save(){ localStorage.setItem(KEY, JSON.stringify(S)); }
+      function load(){ try { return JSON.parse(localStorage.getItem(KEY) || ""); } catch { return null; } }
 
-  // ---------- tiny renderer ----------
-  let TAB = 'home';
-  function setTab(t){ TAB = t; render(); }
-
-  function $app(){ return document.getElementById('app'); }
-
-  function el(tag, props={}, ...children){
-    const n = document.createElement(tag);
-    Object.entries(props).forEach(([k,v])=>{
-      if (k==='class') n.className = v;
-      else if (k.startsWith('on')) n.addEventListener(k.slice(2).toLowerCase(), v);
-      else if (k==='html') n.innerHTML = v;
-      else n.setAttribute(k, v);
-    });
-    children.flat().forEach(c=>{
-      if (c==null) return;
-      n.appendChild(c.nodeType ? c : document.createTextNode(c));
-    });
-    return n;
-  }
-
-  function Section(title, bodyEl){
-    return el('section', {}, el('h2', {}, title), bodyEl);
-  }
-
-  // ---------- Views ----------
-  function Nav(){
-    const tabs = ['home','book','calendar','clients','admin','messages','agreement'];
-    return el('div', {class:'row', style:'margin:12px 0 24px;'},
-      ...tabs.map(t => el('button', {
-        class:'btn' + (TAB===t?' active':''),
-        onclick:()=>setTab(t)
-      }, t[0].toUpperCase()+t.slice(1)))
-    );
-  }
-
-  function Home(){
-    return el('div', {},
-      el('h1', {}, 'Scruffy Butts'),
-      el('small', {class:'muted'}, 'Natalia, TX'),
-      Nav(),
-      Section('Welcome', el('div', {}, 'Pick a tab to try the flows.')),
-      el('div', {class:'row', style:'margin-top:8px;'},
-        el('a', {class:'btn', href:'#', onclick:(e)=>{e.preventDefault();setTab('book');}}, 'Book Appointment'),
-        el('a', {class:'btn', href:'#', onclick:(e)=>{e.preventDefault();setTab('agreement');}}, 'Sign Agreement'),
-        el('a', {class:'btn', href:'#', onclick:(e)=>{e.preventDefault();setTab('messages');}}, 'Messages')
-      )
-    );
-  }
-
-  function Book(){
-    seedIfNeeded();
-    const state = { clientId:'', petId:'', serviceId:'', employeeId:'', start: new Date().toISOString().slice(0,16) };
-
-    const clientSel = el('select', { onchange:e=>{
-      state.clientId = e.target.value; state.petId='';
-      renderInto(formArea, Form());
-    }},
-      el('option', {value:''}, 'Select…'),
-      ...S.clients.map(c => el('option', {value:c.id}, c.name))
-    );
-
-    const petSel = ()=> el('select', { onchange:e=>{ state.petId = e.target.value; } },
-      el('option', {value:''}, 'Select…'),
-      ...S.pets.filter(p=>p.clientId===state.clientId).map(p => el('option', {value:p.id}, p.name))
-    );
-
-    const serviceSel = el('select', { onchange:e=>{ state.serviceId = e.target.value; } },
-      el('option', {value:''}, 'Select…'),
-      ...S.services.map(s => el('option', {value:s.id}, `${s.name} — $${s.price}`))
-    );
-
-    const empSel = el('select', { onchange:e=>{ state.employeeId = e.target.value; } },
-      el('option', {value:''}, 'Select…'),
-      ...S.employees.filter(e=>e.role==='stylist').map(e => el('option', {value:e.id}, e.name))
-    );
-
-    const dt = el('input', { type:'datetime-local', value: state.start, onchange:e=>{state.start=e.target.value;} });
-
-    function submit(){
-      if (!state.clientId || !state.petId || !state.serviceId || !state.employeeId) return alert('Pick client, pet, service, and employee.');
-      const svc = S.services.find(s=>s.id===state.serviceId);
-      const start = new Date(state.start);
-      const end = new Date(start.getTime() + (svc?.duration||60)*60000);
-      S.appointments.push({
-        id: uid(), clientId: state.clientId, petId: state.petId, serviceId: state.serviceId,
-        employeeId: state.employeeId, start: start.toISOString(), end: end.toISOString(), status:'booked'
-      });
-      alert('Booked!');
-      setTab('calendar');
-    }
-
-    function Form(){
-      return el('div', {class:'list'},
-        el('label', {}, el('span', {}, 'Client'), clientSel),
-        state.clientId && el('label', {}, el('span', {}, 'Pet'), petSel()),
-        el('label', {}, el('span', {}, 'Service'), serviceSel),
-        el('label', {}, el('span', {}, 'Employee'), empSel),
-        el('label', {}, el('span', {}, 'Start'), dt),
-        el('div', {}, el('button', {class:'btn', onclick:submit}, 'Book Appointment'))
-      );
-    }
-
-    const formArea = el('div');
-    formArea.appendChild(Form());
-    return el('div', {}, el('h1', {}, 'Book Appointment'), Nav(), formArea);
-  }
-
-  function Calendar(){
-    seedIfNeeded();
-    const day = { value: new Date().toISOString().slice(0,10) };
-
-    function listForDay(){
-      return S.appointments
-        .filter(a => a.start.slice(0,10) === day.value)
-        .sort((a,b)=> a.start.localeCompare(b.start));
-    }
-
-    function fmt(iso){ return new Date(iso).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
-
-    function Item(a){
-      const c = S.clients.find(c=>c.id===a.clientId)?.name || 'Client';
-      const p = S.pets.find(p=>p.id===a.petId)?.name || 'Pet';
-      const s = S.services.find(s=>s.id===a.serviceId)?.name || 'Service';
-      const e = S.employees.find(e=>e.id===a.employeeId)?.name || 'Stylist';
-      const badge = el('span', {class:'pill'}, a.status);
-      const completeBtn = el('button', {class:'btn', onclick:()=>{
-        a.status='complete'; render();
-      }}, 'Complete');
-      const cancelBtn = el('button', {class:'btn', onclick:()=>{
-        a.status='canceled'; render();
-      }}, 'Cancel');
-      return el('div', {class:'card row', style:'justify-content:space-between; align-items:center;'},
-        el('div', {},
-          el('div', {style:'font-weight:600;'}, `${c} – ${p}`),
-          el('div', {class:'small muted'}, s),
-          el('div', {}, `${fmt(a.start)} – ${fmt(a.end)} • ${e}`),
-          el('div', {style:'margin-top:4px;'}, badge)
-        ),
-        el('div', {class:'row'}, completeBtn, cancelBtn)
-      );
-    }
-
-    const dateInput = el('input', {type:'date', value: day.value, onchange:e=>{day.value=e.target.value; render();}});
-    const list = el('div', {class:'list'}, ...listForDay().map(Item));
-    return el('div', {}, el('h1', {}, 'Calendar'), Nav(), el('div', {style:'margin-bottom:8px;'}, dateInput), list);
-  }
-
-  function Clients(){
-    seedIfNeeded();
-    return el('div', {}, el('h1', {}, 'Clients'), Nav(),
-      el('div', {class:'list'},
-        ...S.clients.map(c => el('div', {class:'card'},
-          el('div', {style:'font-weight:600;'}, c.name),
-          el('div', {class:'small muted'}, c.phone + (c.email?` • ${c.email}`:'')),
-          el('div', {style:'margin-top:6px;'}, 'Pets: ' + (S.pets.filter(p=>p.clientId===c.id).map(p=>p.name).join(', ') || '—'))
-        ))
-      )
-    );
-  }
-
-  function Admin(){
-    seedIfNeeded();
-    const state = {
-      start: new Date(Date.now()-7*86400000).toISOString().slice(0,10),
-      end: new Date().toISOString().slice(0,10)
-    };
-    const inRange = iso => iso.slice(0,10) >= state.start && iso.slice(0,10) <= state.end;
-
-    function payroll(){
-      const lines = {};
-      for (const a of S.appointments){
-        if (a.status!=='complete' || !inRange(a.start)) continue;
-        const svc = S.services.find(s=>s.id===a.serviceId); if(!svc) continue;
-        const key = a.employeeId;
-        if (!lines[key]) lines[key] = { name:'', rev:0, pct: svc.pct };
-        lines[key].rev += svc.price;
-        lines[key].pct = svc.pct;
+      const uid = () => Math.random().toString(36).slice(2);
+      function seedIfNeeded(){
+        if (S.seeded) return;
+        S.services = [
+          { id: uid(), name: 'Bath & Brush', price: 35, duration: 45, pct: 40 },
+          { id: uid(), name: 'Full Groom (Small)', price: 65, duration: 75, pct: 50 },
+          { id: uid(), name: 'Full Groom (Medium)', price: 85, duration: 90, pct: 50 },
+          { id: uid(), name: 'Deshedding Add-on', price: 20, duration: 15, pct: 30 },
+        ];
+        S.employees = [
+          { id: uid(), name: 'Taylor', phone: '+12105550101', role:'stylist', pctDefault:50, schedule: {1:[9,17],3:[9,17],5:[9,15]} },
+          { id: uid(), name: 'Jordan', phone: '+12105550102', role:'stylist', pctDefault:45, schedule: {2:[10,18],4:[10,18]} },
+          { id: uid(), name: 'Alex (Admin)', phone: '+12105550103', role:'admin', pctDefault:0, schedule:{} },
+        ];
+        S.clients = [
+          { id: uid(), name: 'Jamie Lee', phone: '+12105550011', email: 'jamie@example.com' },
+          { id: uid(), name: 'Chris P.',  phone: '+12105550012' }
+        ];
+        S.pets = [
+          { id: uid(), clientId: S.clients[0].id, name: 'Buddy', breed:'Golden Retriever', notes:'Nervous at dryers' },
+          { id: uid(), clientId: S.clients[0].id, name: 'Milo',  breed:'Poodle Mix' },
+          { id: uid(), clientId: S.clients[1].id, name: 'Daisy', breed:'Yorkie' },
+        ];
+        const now = new Date(); now.setHours(10,0,0,0);
+        S.appointments = [{
+          id: uid(),
+          clientId: S.clients[0].id,
+          petId: S.pets[0].id,
+          serviceId: S.services[0].id,
+          employeeId: S.employees[0].id,
+          start: now.toISOString(),
+          end: new Date(now.getTime()+45*60000).toISOString(),
+          status: 'booked'
+        }];
+        S.messages = [{
+          id: uid(), from: '+1CLIENT', to: '+1SHOP', body: 'Hi! Can I book for Daisy on Fri at 10?', sentAt: new Date().toISOString()
+        }];
+        S.seeded = true;
+        save();
       }
-      return lines;
-    }
 
-    function Line([empId, v]){
-      const emp = S.employees.find(e=>e.id===empId);
-      const stylist = v.rev * (v.pct/100);
-      const house = v.rev - stylist;
-      return el('div', {class:'card'},
-        el('div', {style:'font-weight:600;'}, emp?.name || 'Employee'),
-        el('div', {}, `Revenue: $${v.rev.toFixed(2)} • ${v.pct}%`),
-        el('div', {}, `Stylist: $${stylist.toFixed(2)} • House: $${house.toFixed(2)}`)
-      );
-    }
+      /********** Tiny DOM helpers **********/
+      const $ = sel => document.querySelector(sel);
+      function el(tag, opts={}, ...kids){
+        const n = document.createElement(tag);
+        for (const [k,v] of Object.entries(opts)){
+          if (k === 'class') n.className = v;
+          else if (k === 'html') n.innerHTML = v;
+          else if (k.startsWith('on')) n.addEventListener(k.slice(2).toLowerCase(), v);
+          else n.setAttribute(k, v);
+        }
+        kids.flat().forEach(c => n.appendChild(c?.nodeType ? c : document.createTextNode(c ?? "")));
+        return n;
+      }
 
-    const startI = el('input', {type:'date', value: state.start, onchange:e=>{ state.start=e.target.value; render(); }});
-    const endI   = el('input', {type:'date', value: state.end,   onchange:e=>{ state.end=e.target.value; render(); }});
+      /********** Tabs **********/
+      let TAB = 'home';
+      const tabs = [
+        ['home','Home'], ['book','Book'], ['calendar','Calendar'],
+        ['clients','Clients'], ['admin','Admin'], ['messages','Messages'],
+        ['agreement','Agreement']
+      ];
+      function renderTabs(){
+        const nav = $('#tabs'); nav.innerHTML = '';
+        tabs.forEach(([id,label])=>{
+          nav.appendChild(
+            el('button', {
+              class: `px-3 py-1.5 rounded-full border text-sm ${TAB===id ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-900 border-zinc-200'}`,
+              onclick:()=>{ TAB=id; render(); }
+            }, label)
+          );
+        });
+      }
 
-    const schedules = el('div', {class:'list'},
-      ...S.employees.map(e => el('div', {class:'card'},
-        el('div', {style:'font-weight:600;'}, e.name),
-        el('div', {}, Object.keys(e.schedule).length? Object.entries(e.schedule).map(([d,[o,c]]) => `${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][+d]}: ${o}:00–${c}:00`).join(' • ') : 'No hours set')
-      ))
-    );
+      /********** Screens **********/
+      function ScreenHome(){
+        return el('div', {class:'grid gap-3'},
+          el('div', {class:'rounded-2xl border border-zinc-200 p-4 shadow-sm'},
+            el('div', {class:'flex items-center gap-3'},
+              el('img', {src:'icon-180.png', class:'size-12 rounded-xl', alt:''}),
+              el('div', {},
+                el('div', {class:'font-bold text-lg'}, 'Scruffy Butts'),
+                el('div', {class:'text-xs text-zinc-500 -mt-0.5'}, 'Grooming • Deshedding • TLC')
+              )
+            )
+          ),
+          el('div', {class:'grid sm:grid-cols-3 gap-3'},
+            cardLink('Book', 'Create an appointment', ()=>{TAB='book'; render();}),
+            cardLink('Agreement', 'Digital consent & signature', ()=>{TAB='agreement'; render();}),
+            cardLink('Messages', 'Two-way texting (demo)', ()=>{TAB='messages'; render();}),
+          )
+        );
+      }
+      function cardLink(title, desc, on){
+        return el('button', {class:'text-left rounded-2xl border border-zinc-200 p-4 shadow-sm hover:shadow transition', onclick:on},
+          el('div', {class:'font-semibold'}, title),
+          el('div', {class:'text-sm text-zinc-500'}, desc)
+        );
+      }
 
-    return el('div', {}, el('h1', {}, 'Admin'), Nav(),
-      Section('Range',
-        el('div', {class:'row'},
-          el('label', {}, el('span', {}, 'Start'), startI),
-          el('label', {}, el('span', {}, 'End'),   endI)
-        )
-      ),
-      Section('Payroll Summary',
-        el('div', {class:'list'}, ...Object.entries(payroll()).map(Line), Object.keys(payroll()).length?null:el('div', {class:'small muted'}, 'No completed appointments in range.'))
-      ),
-      Section('Employee Schedules (weekly)', schedules)
-    );
-  }
+      function ScreenBook(){
+        seedIfNeeded();
+        const state = { clientId:'', petId:'', serviceId:'', employeeId:'', start: new Date().toISOString().slice(0,16) };
+        const petsFor = () => S.pets.filter(p=>p.clientId===state.clientId);
 
-  function Messages(){
-    seedIfNeeded();
-    const state = { compose:'' };
-    const threadEl = el('div', {class:'card', style:'height:300px; overflow:auto; background:#f9fafb;'});
-    function redrawThread(){
-      threadEl.innerHTML = '';
-      (S.messages||[]).forEach(m=>{
-        const bubble = el('div', {class:'card', style:'display:inline-block; padding:6px 8px; margin:4px 0;'});
-        bubble.appendChild(document.createTextNode(m.body));
-        threadEl.appendChild(bubble);
-        threadEl.appendChild(el('div', {class:'small muted'}, new Date(m.sentAt).toLocaleTimeString()));
-      });
-      if (!S.messages.length) threadEl.appendChild(el('div', {class:'small muted'}, 'No messages yet.'));
-    }
-    redrawThread();
+        function select(label, options, onChange, value=''){
+          const sel = el('select', {class:'w-full border rounded-lg p-2', onchange:e=>onChange(e.target.value)});
+          sel.appendChild(el('option', {value:''}, 'Select…'));
+          options().forEach(o => sel.appendChild(el('option', {value:o.value, ...(value===o.value?{selected:''}:{})}, o.label)));
+          return el('label', {class:'grid gap-1'}, el('span', {class:'text-xs text-zinc-500'}, label), sel);
+        }
 
-    const input = el('input', { placeholder:'Type message…', value: state.compose, oninput:e=>{state.compose=e.target.value;} });
-    const send  = el('button', {class:'btn', onclick:()=>{
-      if (!state.compose.trim()) return;
-      S.messages.push({ id: uid(), from:'+1SHOP', to:'+1CLIENT', body: state.compose, sentAt: new Date().toISOString() });
-      state.compose=''; input.value=''; redrawThread();
-    }}, 'Send');
+        const $client = select('Client', ()=> S.clients.map(c=>({value:c.id, label:c.name})), v=>{state.clientId=v; state.petId=''; rebuild();});
+        const $pet    = () => select('Pet', ()=> petsFor().map(p=>({value:p.id, label:p.name})), v=>{state.petId=v;});
+        const $svc    = select('Service', ()=> S.services.map(s=>({value:s.id, label:`${s.name} — $${s.price}`})), v=>{state.serviceId=v;});
+        const $emp    = select('Employee', ()=> S.employees.filter(e=>e.role==='stylist').map(e=>({value:e.id, label:e.name})), v=>{state.employeeId=v;});
+        const $start  = el('label', {class:'grid gap-1'},
+                        el('span', {class:'text-xs text-zinc-500'}, 'Start'),
+                        el('input', {type:'datetime-local', value:state.start, class:'w-full border rounded-lg p-2', oninput:e=>state.start=e.target.value }));
 
-    return el('div', {}, el('h1', {}, 'Messages'), Nav(), threadEl, el('div', {class:'row', style:'margin-top:8px;'}, input, send));
-  }
+        const wrap = el('div', {class:'grid gap-3'});
+        function rebuild(){
+          wrap.innerHTML = '';
+          wrap.appendChild($client);
+          if (state.clientId) wrap.appendChild($pet());
+          wrap.appendChild($svc); wrap.appendChild($emp); wrap.appendChild($start);
+          wrap.appendChild(el('button', {
+            class:'px-4 py-2 rounded-lg bg-zinc-900 text-white disabled:opacity-40',
+            onclick: book, disabled: !(state.clientId && state.petId && state.serviceId && state.employeeId)
+          }, 'Book Appointment'));
+        }
 
-  function Agreement(){
-    seedIfNeeded();
-    const text = el('textarea', {}, 'I consent to grooming services and acknowledge the policies including cancellation, matted coat fees, and emergency care authorization.');
-    let savedSig = null;
+        function book(){
+          const svc = S.services.find(s=>s.id===state.serviceId);
+          const start = new Date(state.start);
+          const end = new Date(start.getTime() + (svc?.duration||60)*60000);
+          S.appointments.push({
+            id: uid(), clientId: state.clientId, petId: state.petId, serviceId: state.serviceId,
+            employeeId: state.employeeId, start: start.toISOString(), end: end.toISOString(), status:'booked'
+          });
+          save();
+          alert('Booked!');
+          TAB='calendar'; render();
+        }
 
-    // simple canvas signature
-    const canvas = el('canvas');
-    const ctx = canvas.getContext('2d');
-    let drawing = false;
-    canvas.addEventListener('mousedown', (e)=>{ drawing=true; ctx.beginPath(); ctx.moveTo(e.offsetX, e.offsetY); });
-    canvas.addEventListener('mousemove', (e)=>{ if(!drawing) return; ctx.lineWidth=2; ctx.lineCap='round'; ctx.strokeStyle='#111'; ctx.lineTo(e.offsetX, e.offsetY); ctx.stroke(); ctx.beginPath(); ctx.moveTo(e.offsetX, e.offsetY); });
-    window.addEventListener('mouseup', ()=> drawing=false);
+        rebuild();
+        return section('Book Appointment', wrap);
+      }
 
-    const saveBtn = el('button', {class:'btn', onclick:()=>{
-      savedSig = canvas.toDataURL('image/png');
-      preview.innerHTML = '';
-      preview.appendChild(el('img', {src:savedSig, style:'max-height:120px; border:1px solid #e5e7eb; border-radius:12px;'}));
-    }}, 'Save');
-    const clearBtn = el('button', {class:'btn', onclick:()=>{
-      ctx.clearRect(0,0,canvas.width,canvas.height);
-      preview.innerHTML = '';
-      savedSig = null;
-    }}, 'Clear');
-    const preview = el('div', {style:'margin-top:8px;'});
+      function ScreenCalendar(){
+        seedIfNeeded();
+        const day = { value: new Date().toISOString().slice(0,10) };
 
-    const addPhotos = el('button', {class:'btn', onclick:()=>alert('Uploads are placeholders in this demo.')}, 'Add Photos');
-    const addDocs   = el('button', {class:'btn', onclick:()=>alert('Uploads are placeholders in this demo.')}, 'Add Docs');
-    const submit    = el('button', {class:'btn', onclick:()=>alert('Agreement submitted (demo).')}, 'Submit Agreement');
+        function list(){ return S.appointments.filter(a => a.start.slice(0,10) === day.value).sort((a,b)=>a.start.localeCompare(b.start)); }
+        const dateI = el('input', {type:'date', value: day.value, class:'border rounded-lg p-2', oninput:e=>{day.value=e.target.value; rebuild();} });
+        const listEl = el('div', {class:'grid gap-2'});
 
-    // make canvas crisp on HiDPI
-    function resizeCanvas(){
-      const ratio = window.devicePixelRatio || 1;
-      const w = canvas.clientWidth || canvas.parentElement.clientWidth;
-      canvas.width = w * ratio;
-      canvas.height = 220 * ratio;
-      ctx.scale(ratio, ratio);
-    }
-    setTimeout(resizeCanvas, 0);
-    window.addEventListener('resize', resizeCanvas);
+        function fmt(iso){ return new Date(iso).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
+        function row(a){
+          const c = S.clients.find(c=>c.id===a.clientId)?.name || 'Client';
+          const p = S.pets.find(p=>p.id===a.petId)?.name || 'Pet';
+          const s = S.services.find(s=>s.id===a.serviceId)?.name || 'Service';
+          const e = S.employees.find(e=>e.id===a.employeeId)?.name || 'Stylist';
+          return el('div', {class:'rounded-2xl border border-zinc-200 p-3 flex items-center justify-between'},
+            el('div', {},
+              el('div', {class:'font-semibold'}, `${c} – ${p}`),
+              el('div', {class:'text-xs text-zinc-500'}, s),
+              el('div', {class:'text-sm'}, `${fmt(a.start)} – ${fmt(a.end)} • ${e}`),
+              el('span', {class:'inline-block text-xs mt-1 px-2 py-0.5 rounded-full border'}, a.status)
+            ),
+            el('div', {class:'flex gap-2'},
+              btn('Complete', ()=>{a.status='complete'; save(); rebuild();}, 'bg-green-600 text-white'),
+              btn('Cancel', ()=>{a.status='canceled'; save(); rebuild();}, 'bg-red-600 text-white')
+            )
+          );
+        }
 
-    return el('div', {}, el('h1', {}, 'Agreement'), Nav(),
-      Section('Digital Agreement', text),
-      Section('Signature', el('div', {}, canvas, el('div', {class:'row', style:'margin-top:8px;'}, saveBtn, clearBtn), preview)),
-      Section('Attachments (photos/docs)', el('div', {class:'row'}, addPhotos, addDocs, el('div', {class:'small muted'}, 'Uploads are placeholders.'))),
-      el('div', {style:'margin-top:8px;'}, submit)
-    );
-  }
+        function btn(label, on, classes='bg-white'){
+          return el('button', {class:`px-3 py-1.5 rounded-lg border ${classes==='bg-white'?'':'border-transparent'} ${classes}`, onclick:on}, label);
+        }
 
-  function render(){
-    const root = $app();
-    root.innerHTML = '';
-    const top = el('div', {},
-      (TAB==='home')?Home():
-      (TAB==='book')?Book():
-      (TAB==='calendar')?Calendar():
-      (TAB==='clients')?Clients():
-      (TAB==='admin')?Admin():
-      (TAB==='messages')?Messages():
-      Agreement()
-    );
-    root.appendChild(top);
-  }
+        function rebuild(){
+          listEl.innerHTML = '';
+          const items = list();
+          if (!items.length) listEl.appendChild(el('div', {class:'text-sm text-zinc-500'}, 'No appointments for this date.'));
+          items.forEach(a => listEl.appendChild(row(a)));
+        }
 
-  // kick off
-  render();
-</script>
+        rebuild();
+        return section('Calendar', el('div', {class:'grid gap-3'}, el('div', {}, dateI), listEl));
+      }
+
+      function ScreenClients(){
+        seedIfNeeded();
+        const wrap = el('div', {class:'grid gap-2'});
+        S.clients.forEach(c=>{
+          wrap.appendChild(
+            el('div', {class:'rounded-2xl border border-zinc-200 p-3'},
+              el('div', {class:'font-semibold'}, c.name),
+              el('div', {class:'text-xs text-zinc-500'}, c.phone + (c.email?` • ${c.email}`:'')),
+              el('div', {class:'text-sm mt-1'}, 'Pets: ' + (S.pets.filter(p=>p.clientId===c.id).map(p=>p.name).join(', ') || '—'))
+            )
+          );
+        });
+        return section('Clients', wrap);
+      }
+
+      function ScreenAdmin(){
+        seedIfNeeded();
+        const range = {
+          start: new Date(Date.now()-7*86400000).toISOString().slice(0,10),
+          end:   new Date().toISOString().slice(0,10)
+        };
+        const startI = el('input', {type:'date', value:range.start, class:'border rounded-lg p-2', oninput:e=>{range.start=e.target.value; redraw();}});
+        const endI   = el('input', {type:'date', value:range.end,   class:'border rounded-lg p-2', oninput:e=>{range.end=e.target.value; redraw();}});
+        const payEl  = el('div', {class:'grid gap-2'});
+        const scheds = el('div', {class:'grid gap-2'});
+
+        function inRange(iso){ const d=iso.slice(0,10); return d>=range.start && d<=range.end; }
+        function payroll(){
+          const lines = {};
+          for (const a of S.appointments){
+            if (a.status!=='complete' || !inRange(a.start)) continue;
+            const svc = S.services.find(s=>s.id===a.serviceId); if(!svc) continue;
+            const key = a.employeeId;
+            if (!lines[key]) lines[key] = { name:'', rev:0, pct: svc.pct };
+            lines[key].rev += svc.price; lines[key].pct = svc.pct;
+          }
+          return lines;
+        }
+
+        function redraw(){
+          // payroll
+          payEl.innerHTML = '';
+          const lines = payroll();
+          const entries = Object.entries(lines);
+          if (!entries.length) payEl.appendChild(el('div', {class:'text-sm text-zinc-500'}, 'No completed appointments in range.'));
+          entries.forEach(([empId, v])=>{
+            const emp = S.employees.find(e=>e.id===empId);
+            const stylist = v.rev * (v.pct/100);
+            const house = v.rev - stylist;
+            payEl.appendChild(
+              el('div', {class:'rounded-2xl border border-zinc-200 p-3'},
+                el('div', {class:'font-semibold'}, emp?.name || 'Employee'),
+                el('div', {class:'text-sm'}, `Revenue: $${v.rev.toFixed(2)} • ${v.pct}%`),
+                el('div', {class:'text-sm'}, `Stylist: $${stylist.toFixed(2)} • House: $${house.toFixed(2)}`)
+              )
+            );
+          });
+
+          // schedules
+          scheds.innerHTML = '';
+          S.employees.forEach(e=>{
+            const scheduleText = Object.keys(e.schedule).length
+              ? Object.entries(e.schedule).map(([d,[o,c]]) => `${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][+d]}: ${o}:00–${c}:00`).join(' • ')
+              : 'No hours set';
+            scheds.appendChild(
+              el('div', {class:'rounded-2xl border border-zinc-200 p-3'},
+                el('div', {class:'font-semibold'}, e.name),
+                el('div', {class:'text-sm'}, scheduleText)
+              )
+            );
+          });
+        }
+
+        redraw();
+        return section('Admin',
+          el('div', {class:'grid gap-6'},
+            el('div', {},
+              el('div', {class:'font-medium mb-2'}, 'Range'),
+              el('div', {class:'flex gap-2'}, startI, endI)
+            ),
+            el('div', {}, el('div', {class:'font-medium mb-2'}, 'Payroll Summary'), payEl),
+            el('div', {}, el('div', {class:'font-medium mb-2'}, 'Employee Schedules (weekly)'), scheds)
+          )
+        );
+      }
+
+      function ScreenMessages(){
+        seedIfNeeded();
+        const thread = el('div', {class:'rounded-2xl border border-zinc-200 p-3 h-72 overflow-auto bg-zinc-50'});
+        const input  = el('input', {class:'flex-1 border rounded-lg p-2', placeholder:'Type message…'});
+        const send   = el('button', {class:'px-4 py-2 rounded-lg bg-zinc-900 text-white disabled:opacity-40'}, 'Send');
+
+        function redraw(){
+          thread.innerHTML = '';
+          (S.messages||[]).forEach(m=>{
+            thread.appendChild(
+              el('div', {class:'mb-2'},
+                el('div', {class:'inline-block rounded-lg border border-zinc-200 bg-white px-2 py-1'}, m.body),
+                el('div', {class:'text-[10px] text-zinc-500'}, new Date(m.sentAt).toLocaleTimeString())
+              )
+            );
+          });
+          if (!S.messages.length) thread.appendChild(el('div', {class:'text-sm text-zinc-500'}, 'No messages yet.'));
+        }
+        redraw();
+
+        send.addEventListener('click', ()=>{
+          const text = input.value.trim(); if (!text) return;
+          S.messages.push({ id: uid(), from:'+1SHOP', to:'+1CLIENT', body:text, sentAt:new Date().toISOString() });
+          input.value=''; save(); redraw();
+        });
+
+        return section('Messages', el('div', {class:'grid gap-3'}, thread, el('div', {class:'flex gap-2'}, input, send)));
+      }
+
+      function ScreenAgreement(){
+        const text = el('textarea', {class:'w-full border rounded-xl p-3 min-h-[140px]'},
+          'I consent to grooming services and acknowledge the policies including cancellation, matted coat fees, and emergency care authorization.'
+        );
+        const canvas = el('canvas', {class:'w-full h-[220px] rounded-xl bg-white border border-zinc-200'});
+        const ctx = canvas.getContext('2d');
+        let drawing=false;
+        function resize(){
+          const ratio = window.devicePixelRatio || 1;
+          const w = canvas.clientWidth; const h = 220;
+          canvas.width = w * ratio; canvas.height = h * ratio; ctx.setTransform(ratio,0,0,ratio,0,0);
+        }
+        setTimeout(resize,0); window.addEventListener('resize', resize);
+        canvas.addEventListener('mousedown',e=>{drawing=true;ctx.beginPath();ctx.moveTo(e.offsetX,e.offsetY);});
+        canvas.addEventListener('mousemove',e=>{ if(!drawing)return; ctx.lineWidth=2; ctx.lineCap='round'; ctx.strokeStyle='#111'; ctx.lineTo(e.offsetX,e.offsetY); ctx.stroke(); ctx.beginPath(); ctx.moveTo(e.offsetX,e.offsetY);});
+        window.addEventListener('mouseup',()=>drawing=false);
+
+        const preview = el('div', {});
+        const saveBtn = button('Save', ()=>{ const url = canvas.toDataURL('image/png'); preview.innerHTML=''; preview.appendChild(el('img', {src:url, class:'max-h-28 rounded-xl border border-zinc-200'})); });
+        const clearBtn= button('Clear', ()=>{ ctx.clearRect(0,0,canvas.width,canvas.height); preview.innerHTML=''; });
+
+        const addPhotos = button('Add Photos', ()=>alert('Uploads will be enabled when hooked to a backend.'));
+        const addDocs   = button('Add Docs', ()=>alert('Uploads will be enabled when hooked to a backend.'));
+        const submit    = el('button', {class:'px-4 py-2 rounded-lg bg-zinc-900 text-white'}, 'Submit Agreement');
+
+        return section('Agreement',
+          el('div', {class:'grid gap-4'},
+            el('div', {}, text),
+            el('div', {}, el('div', {class:'font-medium mb-1'}, 'Signature'), canvas, el('div', {class:'flex gap-2 mt-2'}, saveBtn, clearBtn), preview),
+            el('div', {}, el('div', {class:'font-medium mb-1'}, 'Attachments (photos/docs)'), el('div', {class:'flex gap-2'}, addPhotos, addDocs), el('p', {class:'text-xs text-zinc-500 mt-1'}, 'Uploads are placeholders.')),
+            submit
+          )
+        );
+      }
+
+      /********** UI helpers **********/
+      function section(title, body){
+        return el('div', {class:'grid gap-3'},
+          el('h2', {class:'text-2xl font-bold'}, title),
+          body
+        );
+      }
+
+      /********** Router **********/
+      function render(){
+        renderTabs();
+        const screen = $('#screen'); screen.innerHTML = '';
+        const map = {
+          home: ScreenHome, book: ScreenBook, calendar: ScreenCalendar,
+          clients: ScreenClients, admin: ScreenAdmin, messages: ScreenMessages,
+          agreement: ScreenAgreement
+        };
+        screen.appendChild(map[TAB]());
+      }
+
+      // boot
+      seedIfNeeded();
+      render();
+
+      // PWA: register service worker
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw.js').catch(()=>{});
+      }
+    </script>
+  </body>
 </html>
