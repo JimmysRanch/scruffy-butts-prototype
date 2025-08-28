@@ -2,7 +2,56 @@
 <html lang="en">
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Scruffy Butts – Test</title>
-  <h1 style="font-family:system-ui;margin:2rem;">✅ GitHub Pages is serving HTML</h1>
-  <p style="font-family:system-ui;margin:1rem 2rem;">If you see this, hosting works. Next we’ll re-add the app script.</p>
+  <title>Scruffy Butts</title>
+
+  <div id="root" style="font-family:system-ui;"></div>
+
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+
+  <script>
+    const e = React.createElement;
+
+    function App(){
+      const [tab,setTab]=React.useState('home');
+
+      const Link = ({id, children}) => e('button', {
+        onClick:()=>setTab(id),
+        style:{
+          padding:'8px 12px', border:'1px solid #ddd', borderRadius:8,
+          background: tab===id?'#111':'#fff', color: tab===id?'#fff':'#111',
+          marginRight:8, cursor:'pointer'
+        }
+      }, children);
+
+      const Section = (title, body) => e('section', {style:{marginTop:12}}, [
+        e('h2', {style:{fontSize:22, margin:'16px 0 8px'}}, title),
+        e('div', null, body)
+      ]);
+
+      return e('div', {style:{maxWidth:900, margin:'24px auto', padding:'0 16px'}},
+        e('h1', {style:{fontSize:32, fontWeight:800, marginBottom:8}}, 'Scruffy Butts'),
+        e('p', {style:{color:'#666', marginTop:0}}, 'Natalia, TX'),
+        e('div', {style:{margin:'12px 0 24px'}}, [
+          e(Link,{id:'home'},'Home'),
+          e(Link,{id:'book'},'Book'),
+          e(Link,{id:'calendar'},'Calendar'),
+          e(Link,{id:'clients'},'Clients'),
+          e(Link,{id:'admin'},'Admin'),
+          e(Link,{id:'messages'},'Messages'),
+          e(Link,{id:'agreement'},'Agreement'),
+        ]),
+        tab==='home' && Section('Home', 'Welcome!'),
+        tab==='book' && Section('Book', 'Booking form goes here.'),
+        tab==='calendar' && Section('Calendar', 'Appointments for the selected day.'),
+        tab==='clients' && Section('Clients', 'Client list.'),
+        tab==='admin' && Section('Admin', 'Payroll & schedules.'),
+        tab==='messages' && Section('Messages', 'Two-way texting (demo).'),
+        tab==='agreement' && Section('Agreement', 'Signature & uploads (stub).'),
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(e(App));
+  </script>
 </html>
