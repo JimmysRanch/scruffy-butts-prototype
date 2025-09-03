@@ -13,17 +13,50 @@
   <meta name="apple-mobile-web-app-title" content="Scruffy Butts" />
   <link rel="apple-touch-icon" href="icon-180.png" />
 
+  <!-- Brand font -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+
   <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    // Tailwind CDN theme config
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50:'#f0f7ff',100:'#dff0ff',200:'#bee0ff',300:'#93ccff',
+              400:'#5fb3ff',500:'#2e9bff',600:'#197fe0',700:'#1262b1',800:'#0f4c8a',900:'#0c3d70'
+            },
+            pop: { 100:'#ffe6f3', 500:'#ff67b3', 600:'#ff4da7', 700:'#e63e96' }
+          },
+          fontFamily: {
+            sans: ['Inter','system-ui','ui-sans-serif','Segoe UI','Roboto','Helvetica','Arial']
+          },
+          boxShadow: {
+            card: '0 10px 30px -12px rgba(0,0,0,.25)'
+          },
+          borderRadius: {
+            xl2: '1.25rem'
+          }
+        }
+      }
+    }
+  </script>
+
   <style>
+    /* iOS safe-area pad for any sticky headers if you add later */
     .safe-top { padding-top: max(env(safe-area-inset-top), 12px); }
+    .tap { -webkit-tap-highlight-color: transparent; }  /* removes gray tap flash */
+    .hit { min-height: 44px; min-width: 44px; }         /* comfy tap targets */
+    .anim { transition: all .18s ease; }
   </style>
 </head>
 <body class="bg-white text-zinc-900">
   <div id="app" class="min-h-screen"></div>
 
   <script>
-    /********** State + seed **********/
+    /********** State + seed (localStorage) **********/
     const KEY="sb_state_v1";
     const S = JSON.parse(localStorage.getItem(KEY) || "null") || {
       services:[], employees:[], clients:[], pets:[], appointments:[], messages:[], seeded:false
@@ -33,10 +66,10 @@
     function seed(){
       if (S.seeded) return;
       S.services = [
-        { id: uid(), name: 'Bath & Brush', price: 35, duration: 45, pct: 40 },
-        { id: uid(), name: 'Full Groom (Small)', price: 65, duration: 75, pct: 50 },
+        { id: uid(), name: 'Bath & Brush',        price: 35, duration: 45, pct: 40 },
+        { id: uid(), name: 'Full Groom (Small)',  price: 65, duration: 75, pct: 50 },
         { id: uid(), name: 'Full Groom (Medium)', price: 85, duration: 90, pct: 50 },
-        { id: uid(), name: 'Deshedding Add-on', price: 20, duration: 15, pct: 30 },
+        { id: uid(), name: 'Deshedding Add-on',   price: 20, duration: 15, pct: 30 },
       ];
       S.employees = [
         { id: uid(), name: 'Taylor', role:'stylist', pctDefault:50, schedule:{1:[9,17],3:[9,17],5:[9,15]} },
@@ -79,23 +112,25 @@
       kids.flat().forEach(c => n.appendChild(c?.nodeType?c:document.createTextNode(c??"")));
       return n;
     }
-    function fmtTime(iso){ return new Date(iso).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
+    const fmtTime = iso => new Date(iso).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
 
     /********** Router **********/
-    let TAB = 'dashboard'; // default screen
+    let TAB = 'dashboard';
     function setTab(t){ TAB=t; render(); }
 
     /********** Sidebar **********/
     function Sidebar(){
       const Item = (id, label, icon) => el('button', {
-        class:`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left
-               ${TAB===id?'bg-white/90 text-zinc-900 shadow':'text-white/90 hover:bg-white/10'}`,
+        class:`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left hit tap anim
+               ${TAB===id?'bg-white/95 text-zinc-900 shadow-card':'text-white/90 hover:bg-white/10'}`,
         onclick:()=>setTab(id)
       }, el('span',{class:'text-lg'},icon), el('span',{},label));
 
-      return el('aside',{class:'w-[240px] shrink-0 bg-gradient-to-b from-sky-600 to-blue-600 text-white p-4 space-y-4 hidden md:block'},
+      return el('aside',{
+        class:'w-[250px] shrink-0 bg-gradient-to-b from-brand-600 to-brand-800 text-white p-4 space-y-4 hidden md:block'
+      },
         el('div',{class:'flex items-center gap-3'},
-          el('img',{src:'icon-180.png', class:'w-12 h-12 rounded-xl', alt:''}),
+          el('img',{src:'icon-180.png', class:'w-12 h-12 rounded-xl shadow-card', alt:''}),
           el('div',{},
             el('div',{class:'font-extrabold text-xl leading-5'},'Scruffy Butts'),
             el('div',{class:'text-xs text-white/80 -mt-0.5'},'Natalia, TX')
@@ -113,22 +148,26 @@
       );
     }
 
-    /********** Dashboard **********/
-    function KPI(label, value, icon){
-      return el('div',{class:'rounded-2xl border border-zinc-200 bg-white p-4 flex items-center gap-3 shadow-sm'},
-        el('div',{class:'text-2xl'},icon),
-        el('div',{},
-          el('div',{class:'text-xs text-zinc-500'},label),
-          el('div',{class:'font-bold text-xl'}, value)
-        )
+    /********** Themed cards **********/
+    function Card(title, body){
+      return el('div',{class:'rounded-xl2 border border-zinc-200 bg-white shadow-card overflow-hidden'},
+        el('div',{class:'px-4 py-2 font-semibold bg-pop-100 text-pop-700'}, title),
+        el('div',{class:'p-4'}, body)
       );
     }
+    const KPI = (label, value, icon) =>
+      el('div',{class:'rounded-xl2 border border-zinc-200 bg-white p-4 flex items-center gap-3 shadow-card'},
+        el('div',{class:'text-2xl'},icon),
+        el('div',{}, el('div',{class:'text-xs text-zinc-500'},label), el('div',{class:'font-bold text-xl'}, value))
+      );
+
+    /********** Dashboard **********/
     function AppointmentsCard(){
       const today = new Date().toISOString().slice(0,10);
       const appts = S.appointments.filter(a=>a.start.slice(0,10)===today).sort((a,b)=>a.start.localeCompare(b.start));
       const Row = a => {
         const pet = S.pets.find(p=>p.id===a.petId)?.name || 'Pet';
-        const dot = {booked:'bg-sky-500', complete:'bg-emerald-500', canceled:'bg-rose-500'}[a.status] || 'bg-zinc-400';
+        const dot = {booked:'bg-brand-500', complete:'bg-emerald-500', canceled:'bg-rose-500'}[a.status] || 'bg-zinc-400';
         return el('div',{class:'flex items-center justify-between py-1'},
           el('div',{class:'flex items-center gap-2'},
             el('span',{class:`inline-block w-2 h-2 rounded-full ${dot}`}),
@@ -144,34 +183,22 @@
     }
     function CustomersCard(){
       const names = S.clients.map(c=>c.name);
-      const grid = el('div',{class:'grid grid-cols-2 gap-x-6 gap-y-1 text-sm'},
-        ...names.map(n=>el('div',{},n))
-      );
+      const grid = el('div',{class:'grid grid-cols-2 gap-x-6 gap-y-1 text-sm'}, ...names.map(n=>el('div',{},n)));
       return Card('Customer List', grid);
     }
     function PromoCard(){
       return Card('Upcoming Services',
         el('div',{class:'flex items-center gap-3'},
-          el('div',{class:'w-28 h-20 rounded-xl bg-sky-100 flex items-center justify-center'},'🐶'),
-          el('div',{},
-            el('div',{class:'font-semibold'},'Full Grooming'),
-            el('div',{class:'text-sm text-zinc-500'},'2:00 PM')
-          )
+          el('div',{class:'w-28 h-20 rounded-xl bg-brand-50 flex items-center justify-center text-3xl'},'🐶'),
+          el('div',{}, el('div',{class:'font-semibold'},'Full Grooming'), el('div',{class:'text-sm text-zinc-500'},'2:00 PM'))
         )
       );
     }
     function ReportsCard(){
-      const vals=[120,180,220,300,420];
-      const max=Math.max(...vals);
-      const bars = vals.map((v,i)=>el('rect',{x: i*26+24, y: 120 - (v/max)*100, width:20, height:(v/max)*100, rx:4, class:'fill-sky-400'}));
+      const vals=[120,180,220,300,420], max=Math.max(...vals);
+      const bars = vals.map((v,i)=>el('rect',{x: i*26+24, y: 120 - (v/max)*100, width:20, height:(v/max)*100, rx:4, class:'fill-brand-400'}));
       const svg = el('svg',{viewBox:'0 0 170 130', class:'w-full h-28'}, ...bars);
       return Card('Reports', svg);
-    }
-    function Card(title, body){
-      return el('div',{class:'rounded-2xl border border-zinc-200 bg-white shadow-sm overflow-hidden'},
-        el('div',{class:'px-4 py-2 font-semibold bg-pink-100 text-pink-900'}, title),
-        el('div',{class:'p-4'}, body)
-      );
     }
     function Dashboard(){
       const todayCount = S.appointments.filter(a=>a.start.slice(0,10)===new Date().toISOString().slice(0,10)).length;
@@ -184,44 +211,37 @@
           KPI('Upcoming Services', 7,'🐕')
         ),
         el('div',{class:'grid lg:grid-cols-2 gap-4'},
-          el('div',{class:'grid gap-4'},
-            AppointmentsCard(),
-            CustomersCard()
-          ),
-          el('div',{class:'grid gap-4'},
-            PromoCard(),
-            ReportsCard()
-          )
+          el('div',{class:'grid gap-4'}, AppointmentsCard(), CustomersCard()),
+          el('div',{class:'grid gap-4'}, PromoCard(), ReportsCard())
         )
       );
     }
-        /********** Book **********/
+
+    /********** Book **********/
     function Book(){
       seed();
       const state = { clientId:'', petId:'', serviceId:'', employeeId:'', start:new Date().toISOString().slice(0,16) };
       const petsFor = ()=> S.pets.filter(p=>p.clientId===state.clientId);
-
-      function select(label, opts, onChange, value=''){
-        const sel = el('select',{class:'w-full border rounded-lg p-2',onchange:e=>onChange(e.target.value)});
+      function select(label, opts, onChange){
+        const sel = el('select',{class:'w-full border rounded-xl p-2',onchange:e=>onChange(e.target.value)});
         sel.appendChild(el('option',{value:''},'Select…'));
         opts().forEach(o=>sel.appendChild(el('option',{value:o.value},o.label)));
         return el('label',{class:'grid gap-1'}, el('span',{class:'text-xs text-zinc-500'},label), sel);
       }
-
       const $client = select('Client', ()=>S.clients.map(c=>({value:c.id,label:c.name})), v=>{state.clientId=v;state.petId='';rebuild();});
       const $pet    = ()=>select('Pet', ()=>petsFor().map(p=>({value:p.id,label:p.name})), v=>{state.petId=v;});
       const $svc    = select('Service', ()=>S.services.map(s=>({value:s.id,label:`${s.name} — $${s.price}`})), v=>{state.serviceId=v;});
       const $emp    = select('Employee', ()=>S.employees.map(e=>({value:e.id,label:e.name})), v=>{state.employeeId=v;});
       const $start  = el('label',{class:'grid gap-1'}, el('span',{class:'text-xs text-zinc-500'},'Start'),
-                        el('input',{type:'datetime-local',value:state.start,class:'w-full border rounded-lg p-2',oninput:e=>state.start=e.target.value}));
-
+                        el('input',{type:'datetime-local',value:state.start,class:'w-full border rounded-xl p-2',oninput:e=>state.start=e.target.value}));
       const wrap = el('div',{class:'grid gap-3'});
       function rebuild(){
-        wrap.innerHTML='';
-        wrap.appendChild($client);
-        if(state.clientId) wrap.appendChild($pet());
+        wrap.innerHTML=''; wrap.appendChild($client); if(state.clientId) wrap.appendChild($pet());
         wrap.appendChild($svc); wrap.appendChild($emp); wrap.appendChild($start);
-        wrap.appendChild(el('button',{class:'px-4 py-2 rounded-lg bg-zinc-900 text-white',onclick:book},'Book Appointment'));
+        wrap.appendChild(el('button',{
+          class:'px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white tap anim',
+          onclick:book
+        },'Book Appointment'));
       }
       function book(){
         if(!state.clientId||!state.petId||!state.serviceId||!state.employeeId) return alert('Fill all fields');
@@ -239,20 +259,22 @@
     function Calendar(){
       seed();
       const day={value:new Date().toISOString().slice(0,10)};
-      const dateI=el('input',{type:'date',value:day.value,class:'border rounded-lg p-2 mb-3',
+      const dateI=el('input',{type:'date',value:day.value,class:'border rounded-xl p-2 mb-3',
         oninput:e=>{day.value=e.target.value;rebuild();}});
       const list=el('div',{class:'grid gap-2'});
-      function fmt(iso){return new Date(iso).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});}
       function row(a){
         const c=S.clients.find(c=>c.id===a.clientId)?.name; const p=S.pets.find(p=>p.id===a.petId)?.name;
         const s=S.services.find(s=>s.id===a.serviceId)?.name; const e=S.employees.find(e=>e.id===a.employeeId)?.name;
-        return el('div',{class:'rounded-2xl border border-zinc-200 p-3 flex justify-between items-center'},
-          el('div',{}, el('div',{class:'font-semibold'},`${c} – ${p}`), el('div',{class:'text-xs text-zinc-500'},s),
-            el('div',{class:'text-sm'},`${fmt(a.start)} – ${fmt(a.end)} • ${e}`),
-            el('span',{class:'inline-block text-xs mt-1 px-2 py-0.5 rounded-full border'},a.status)),
+        return el('div',{class:'rounded-xl2 border border-zinc-200 p-3 flex justify-between items-center bg-white shadow-card'},
+          el('div',{},
+            el('div',{class:'font-semibold'},`${c} – ${p}`),
+            el('div',{class:'text-xs text-zinc-500'},s),
+            el('div',{class:'text-sm'},`${fmtTime(a.start)} – ${fmtTime(a.end)} • ${e}`),
+            el('span',{class:'inline-block text-xs mt-1 px-2 py-0.5 rounded-full border'},a.status)
+          ),
           el('div',{class:'flex gap-2'},
-            el('button',{class:'px-3 py-1 rounded-lg bg-green-600 text-white',onclick:()=>{a.status='complete';save();rebuild();}},'Complete'),
-            el('button',{class:'px-3 py-1 rounded-lg bg-red-600 text-white',onclick:()=>{a.status='canceled';save();rebuild();}},'Cancel')
+            el('button',{class:'px-3 py-1 rounded-lg bg-emerald-600 text-white tap anim',onclick:()=>{a.status='complete';save();rebuild();}},'Complete'),
+            el('button',{class:'px-3 py-1 rounded-lg bg-rose-600 text-white tap anim',onclick:()=>{a.status='canceled';save();rebuild();}},'Cancel')
           )
         );
       }
@@ -270,7 +292,7 @@
       seed();
       const wrap=el('div',{class:'grid gap-2'});
       S.clients.forEach(c=>{
-        wrap.appendChild(el('div',{class:'rounded-2xl border border-zinc-200 p-3'},
+        wrap.appendChild(el('div',{class:'rounded-xl2 border border-zinc-200 p-3 bg-white shadow-card'},
           el('div',{class:'font-semibold'},c.name),
           el('div',{class:'text-xs text-zinc-500'},c.phone||''),
           el('div',{class:'text-sm mt-1'},'Pets: '+(S.pets.filter(p=>p.clientId===c.id).map(p=>p.name).join(', ')||'—'))
@@ -283,8 +305,8 @@
     function Admin(){
       seed();
       const range={start:new Date(Date.now()-7*86400000).toISOString().slice(0,10),end:new Date().toISOString().slice(0,10)};
-      const startI=el('input',{type:'date',value:range.start,class:'border rounded-lg p-2',oninput:e=>{range.start=e.target.value;rebuild();}});
-      const endI=el('input',{type:'date',value:range.end,class:'border rounded-lg p-2',oninput:e=>{range.end=e.target.value;rebuild();}});
+      const startI=el('input',{type:'date',value:range.start,class:'border rounded-xl p-2',oninput:e=>{range.start=e.target.value;rebuild();}});
+      const endI=el('input',{type:'date',value:range.end,class:'border rounded-xl p-2',oninput:e=>{range.end=e.target.value;rebuild();}});
       const payEl=el('div',{class:'grid gap-2'}); const scheds=el('div',{class:'grid gap-2'});
       function inRange(iso){const d=iso.slice(0,10);return d>=range.start&&d<=range.end;}
       function payroll(){
@@ -300,22 +322,25 @@
         entries.forEach(([empId,v])=>{
           const emp=S.employees.find(e=>e.id===empId);
           const stylist=v.rev*(v.pct/100); const house=v.rev-stylist;
-          payEl.appendChild(el('div',{class:'rounded-2xl border border-zinc-200 p-3'},
+          payEl.appendChild(el('div',{class:'rounded-xl2 border border-zinc-200 p-3 bg-white shadow-card'},
             el('div',{class:'font-semibold'},emp?.name||'Employee'),
             el('div',{class:'text-sm'},`Revenue: $${v.rev.toFixed(2)} • ${v.pct}%`),
             el('div',{class:'text-sm'},`Stylist: $${stylist.toFixed(2)} • House: $${house.toFixed(2)}`)
           ));
         });
         scheds.innerHTML=''; S.employees.forEach(e=>{
-          const txt=Object.keys(e.schedule).length?Object.entries(e.schedule).map(([d,[o,c]])=>`${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][+d]}: ${o}:00–${c}:00`).join(' • '):'No hours set';
-          scheds.appendChild(el('div',{class:'rounded-2xl border border-zinc-200 p-3'},
+          const txt=Object.keys(e.schedule).length
+            ? Object.entries(e.schedule).map(([d,[o,c]])=>`${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][+d]}: ${o}:00–${c}:00`).join(' • ')
+            : 'No hours set';
+          scheds.appendChild(el('div',{class:'rounded-xl2 border border-zinc-200 p-3 bg-white shadow-card'},
             el('div',{class:'font-semibold'},e.name),
             el('div',{class:'text-sm'},txt)
           ));
         });
       }
       rebuild();
-      return el('div',{class:'flex-1 p-4 md:p-6'}, el('h1',{class:'text-3xl font-extrabold mb-4'},'Reports'),
+      return el('div',{class:'flex-1 p-4 md:p-6'},
+        el('h1',{class:'text-3xl font-extrabold mb-4'},'Reports'),
         el('div',{class:'flex gap-2 mb-4'},startI,endI),
         el('div',{class:'mb-4'},payEl),
         el('div',{},scheds)
@@ -325,13 +350,13 @@
     /********** Messages **********/
     function Messages(){
       seed();
-      const thread=el('div',{class:'rounded-2xl border border-zinc-200 p-3 h-72 overflow-auto bg-zinc-50'});
-      const input=el('input',{class:'flex-1 border rounded-lg p-2',placeholder:'Type message…'});
-      const send=el('button',{class:'px-4 py-2 rounded-lg bg-zinc-900 text-white'},'Send');
+      const thread=el('div',{class:'rounded-xl2 border border-zinc-200 p-3 h-72 overflow-auto bg-zinc-50'});
+      const input=el('input',{class:'flex-1 border rounded-xl p-2',placeholder:'Type message…'});
+      const send=el('button',{class:'px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white tap anim'},'Send');
       function redraw(){
         thread.innerHTML=''; (S.messages||[]).forEach(m=>{
           thread.appendChild(el('div',{class:'mb-2'},
-            el('div',{class:'inline-block rounded-lg border border-zinc-200 bg-white px-2 py-1'},m.body),
+            el('div',{class:'inline-block rounded-lg border border-zinc-200 bg-white px-2 py-1 shadow-sm'},m.body),
             el('div',{class:'text-[10px] text-zinc-500'},new Date(m.sentAt).toLocaleTimeString())
           ));
         }); if(!S.messages.length) thread.appendChild(el('div',{class:'text-sm text-zinc-500'},'No messages yet.'));
@@ -346,10 +371,10 @@
     /********** Agreement **********/
     function Agreement(){
       seed();
-      const text=el('textarea',{class:'w-full border rounded-xl p-3 min-h-[140px]'},
+      const text=el('textarea',{class:'w-full border rounded-xl2 p-3 min-h-[140px]'},
         'I consent to grooming services and acknowledge the policies including cancellation, matted coat fees, and emergency care authorization.'
       );
-      const canvas=el('canvas',{class:'w-full h-[220px] rounded-xl bg-white border border-zinc-200'}); const ctx=canvas.getContext('2d');
+      const canvas=el('canvas',{class:'w-full h-[220px] rounded-xl2 bg-white border border-zinc-200 shadow-card'}); const ctx=canvas.getContext('2d');
       let drawing=false;
       function resize(){const r=window.devicePixelRatio||1;const w=canvas.clientWidth;const h=220;
         canvas.width=w*r;canvas.height=h*r;ctx.setTransform(r,0,0,r,0,0);} setTimeout(resize,0);window.addEventListener('resize',resize);
@@ -357,12 +382,15 @@
       canvas.addEventListener('mousemove',e=>{if(!drawing)return;ctx.lineWidth=2;ctx.lineCap='round';ctx.strokeStyle='#111';
         ctx.lineTo(e.offsetX,e.offsetY);ctx.stroke();ctx.beginPath();ctx.moveTo(e.offsetX,e.offsetY);});
       window.addEventListener('mouseup',()=>drawing=false);
-      const preview=el('div',{}); const saveBtn=el('button',{class:'px-4 py-2 rounded-lg bg-zinc-900 text-white',onclick:()=>{const url=canvas.toDataURL('image/png');preview.innerHTML='';preview.appendChild(el('img',{src:url,class:'max-h-28 rounded-xl border border-zinc-200'}));}},'Save');
-      const clearBtn=el('button',{class:'px-4 py-2 rounded-lg bg-red-600 text-white',onclick:()=>{ctx.clearRect(0,0,canvas.width,canvas.height);preview.innerHTML='';}},'Clear');
-      const addPhotos=el('button',{class:'px-4 py-2 rounded-lg bg-sky-600 text-white',onclick:()=>alert('Uploads will be enabled when hooked to a backend.')},'Add Photos');
-      const addDocs=el('button',{class:'px-4 py-2 rounded-lg bg-sky-600 text-white',onclick:()=>alert('Uploads will be enabled when hooked to a backend.')},'Add Docs');
-      const submit=el('button',{class:'px-4 py-2 rounded-lg bg-zinc-900 text-white'},'Submit Agreement');
-      return el('div',{class:'flex-1 p-4 md:p-6'}, el('h1',{class:'text-3xl font-extrabold mb-4'},'Agreement'),
+      const preview=el('div',{}); 
+      const saveBtn=el('button',{class:'px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white tap anim',
+        onclick:()=>{const url=canvas.toDataURL('image/png');preview.innerHTML='';preview.appendChild(el('img',{src:url,class:'max-h-28 rounded-xl border border-zinc-200 shadow-sm'}));}},'Save');
+      const clearBtn=el('button',{class:'px-4 py-2 rounded-xl bg-rose-600 text-white tap anim',onclick:()=>{ctx.clearRect(0,0,canvas.width,canvas.height);preview.innerHTML='';}},'Clear');
+      const addPhotos=el('button',{class:'px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white tap anim',onclick:()=>alert('Uploads will be enabled when hooked to a backend.')},'Add Photos');
+      const addDocs=el('button',{class:'px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white tap anim',onclick:()=>alert('Uploads will be enabled when hooked to a backend.')},'Add Docs');
+      const submit=el('button',{class:'px-4 py-2 rounded-xl bg-brand-800 text-white tap anim'},'Submit Agreement');
+      return el('div',{class:'flex-1 p-4 md:p-6'},
+        el('h1',{class:'text-3xl font-extrabold mb-4'},'Agreement'),
         el('div',{class:'grid gap-4'}, text,
           el('div',{},el('div',{class:'font-medium mb-1'},'Signature'),canvas,el('div',{class:'flex gap-2 mt-2'},saveBtn,clearBtn),preview),
           el('div',{},el('div',{class:'font-medium mb-1'},'Attachments'),el('div',{class:'flex gap-2'},addPhotos,addDocs)),
@@ -389,7 +417,9 @@
     seed();
     function render(){const root=$('#app');root.innerHTML='';root.appendChild(App());}
     render();
-    if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
+
+    // PWA worker
+    if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
   </script>
 </body>
 </html>
