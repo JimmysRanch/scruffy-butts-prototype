@@ -75,6 +75,25 @@ const supa = (window.supabase && SUPABASE_URL && SUPABASE_ANON_KEY)
   ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
   : null;
 
+    // helper: fetch bookings within a date range (inclusive) from the view
+async function fetchAppointmentsRange(startISODate, endISODate) {
+  if (!supa) return null;
+  try {
+    const { data, error } = await supa
+      .from('booking_with_dogs')   // <-- the read-only view
+      .select('*')
+      .gte('when_date', startISODate)  // date column
+      .lte('when_date', endISODate)
+      .order('when_date', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  } catch (e) {
+    console.warn('Supabase fetch failed; falling back to local data.', e);
+    return null;
+  }
+}
+    
 // normalize any row from Supabase to what UI expects
 const normalize = (r) => {
   const time = (r.when_time || '09:00').padStart(5, '0'); // HH:MM
