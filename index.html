@@ -717,11 +717,7 @@ function render(){ const root=$('#app'); root.innerHTML=''; root.appendChild(App
 render();
 
 /* ===== PWA worker (already in repo root) ===== */
-<script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister()));
-}
-</script>
+
   </script>
 </body>
 </html>
