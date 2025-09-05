@@ -16,6 +16,8 @@
   <!-- Brand font -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
 
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  
   <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -66,7 +68,34 @@ window.onerror = function (msg, src, line, col, err) {
 };
 
 /* ===== state + seed (localStorage) ===== */
-const KEY="sb_state_v1";
+/* ===== supabase (live data) ===== */
+const SUPABASE_URL = https://tzbybtluhzntfhjexptw.supabase.co;
+const SUPABASE_ANON_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR6YnlidGx1aHpudGZoamV4cHR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY0MTkxNzIsImV4cCI6MjA3MTk5NTE3Mn0.E-2Y9CupjktT67UwkCP3Bm7-cBDmkolk2RIo_sPyRHQ;
+const supa = (window.supabase && SUPABASE_URL && SUPABASE_ANON_KEY)
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  : null;
+
+// helper: fetch appointments within a date range (inclusive)
+async function fetchAppointmentsRange(startISODate, endISODate) {
+  if (!supa) return null; // SDK not loaded or keys missing
+  try {
+    // Adjust table/columns if your schema is different.
+    // Expecting columns at least: id, start, end, status, (optional) client_name, pet_name, service_name, employee_name
+    const { data, error } = await supa
+      .from('appointments')
+      .select('*')
+      .gte('start', startISODate + 'T00:00:00.000Z')
+      .lte('start', endISODate   + 'T23:59:59.999Z')
+      .order('start', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  } catch (e) {
+    console.warn('Supabase fetch failed; falling back to local data.', e);
+    return null;
+  }
+}
+    const KEY="sb_state_v1";
 const S = JSON.parse(localStorage.getItem(KEY) || "null") || {
   services:[], employees:[], clients:[], pets:[], appointments:[], messages:[], seeded:false
 };
@@ -276,6 +305,196 @@ function Book(){
   );
 }
 
+/* ===== calendar (day/week/month) — pulls from Supabase when available ===== */
+function Calendar(){
+  seed();
+  const state = { view:'day', focus:new Date() };
+
+  // cache of live appts keyed by ISO date (YYYY-MM-DD)
+  const LIVE = new Map();
+
+  const root  = el('div',{class:'flex-1 p-4 md:p-6'});
+  const title = el('h1',{class:'text-3xl font-extrabold mb-2'},'Calendar');
+  const crumbs= Breadcrumb([{label:'Dashboard', click:()=>goto('dashboard')}, {label:'Calendar', click:()=>goto('calendar')}]);
+  const toolbar = el('div',{class:'flex flex-wrap gap-2 items-center mb-3'});
+  const content = el('div',{class:'grid gap-3'});
+
+  const btn = (label, on, cls='') => el('button',{ class:`px-3 py-1.5 rounded-xl border anim tap ${cls||'bg-white hover:bg-zinc-50'}`, onclick:on }, label);
+  const todayBtn = btn('Today', ()=>{ state.focus=new Date(); rebuild(); maybeLoad(); }, 'bg-brand-600 hover:bg-brand-700 text-white border-transparent');
+  const prevBtn  = btn('◀︎', ()=>{ nav(-1); });
+  const nextBtn  = btn('▶︎', ()=>{ nav(+1); });
+  const toggle = el('div',{class:'inline-flex rounded-xl overflow-hidden border'},
+    tabBtn('Day'), tabBtn('Week'), tabBtn('Month')
+  );
+
+  function tabBtn(name){
+    const id=name.toLowerCase();
+    return el('button',{
+      class:`px-3 py-1.5 text-sm ${state.view===id ? 'bg-brand-600 text-white' : 'bg-white hover:bg-zinc-50'}`,
+      onclick:()=>{ state.view=id; rebuild(); maybeLoad(); }
+    }, name);
+  }
+
+  function nav(dir){
+    const f=state.focus;
+    if (state.view==='day')   state.focus = addDays(f, dir);
+    if (state.view==='week')  state.focus = addDays(f, dir*7);
+    if (state.view==='month') state.focus = new Date(f.getFullYear(), f.getMonth()+dir, 1);
+    rebuild(); maybeLoad();
+  }
+
+  function headerLabel(){
+    const f=state.focus;
+    const fmt = (o)=>f.toLocaleDateString([],o);
+    if (state.view==='day')   return fmt({weekday:'long', month:'long', day:'numeric', year:'numeric'});
+    if (state.view==='week')  { const s=startOfWeek(f), e=addDays(s,6);
+      return `${s.toLocaleDateString([], {month:'short', day:'numeric'})} – ${e.toLocaleDateString([], {month:'short', day:'numeric', year:'numeric'})}`; }
+    return f.toLocaleDateString([], {month:'long', year:'numeric'});
+  }
+
+  // normalize any row from Supabase to what UI expects
+  const normalize = (r) => ({
+    id: r.id,
+    start: r.start, // ISO string
+    end:   r.end   || r.start, // tolerate missing end
+    status: r.status || 'booked',
+    clientName: r.client_name || r.client || r.customer || 'Client',
+    petName:    r.pet_name    || r.pet    || 'Pet',
+    serviceName:r.service_name|| r.service|| 'Service',
+    employeeName:r.employee_name|| r.employee|| 'Stylist'
+  });
+
+  function apptsForDateISO(isoDate){
+    // prefer live data; else fall back to local seeded data
+    if (LIVE.has(isoDate)) return LIVE.get(isoDate);
+    return S.appointments
+      .filter(a=>a.start.slice(0,10)===isoDate)
+      .map(a=>({
+        id:a.id,
+        start:a.start, end:a.end, status:a.status,
+        clientName: getClient(a.clientId)?.name ?? 'Client',
+        petName:    getPet(a.petId)?.name ?? 'Pet',
+        serviceName:getService(a.serviceId)?.name ?? 'Service',
+        employeeName:getEmployee(a.employeeId)?.name ?? 'Stylist'
+      }))
+      .sort((a,b)=>a.start.localeCompare(b.start));
+  }
+
+  async function maybeLoad(){
+    if (!supa) return; // no keys / SDK — stay on local data
+    // determine range we need
+    const f = state.focus;
+    let start, end;
+    if (state.view==='day')   { start = toISODate(f); end = start; }
+    if (state.view==='week')  { const s=startOfWeek(f); start=toISODate(s); end=toISODate(addDays(s,6)); }
+    if (state.view==='month') {
+      const first = new Date(f.getFullYear(), f.getMonth(), 1);
+      const last  = new Date(f.getFullYear(), f.getMonth()+1, 0);
+      start = toISODate(first); end = toISODate(last);
+    }
+
+    const rows = await fetchAppointmentsRange(start, end);
+    if (!rows) return; // network/RLS issue → keep local
+    // fill cache
+    const bucket = {};
+    rows.map(normalize).forEach(r=>{
+      const d = r.start.slice(0,10);
+      (bucket[d] ||= []).push(r);
+    });
+    Object.entries(bucket).forEach(([d,list])=>{
+      LIVE.set(d, list.sort((a,b)=>a.start.localeCompare(b.start)));
+    });
+    rebuild(); // re-render with live data
+  }
+
+  function buildDay(){
+    const d = toISODate(state.focus);
+    const list = apptsForDateISO(d);
+    const wrap = el('div',{class:'grid gap-2'});
+    if (!list.length) wrap.appendChild(el('div',{class:'text-sm text-zinc-500'},'No appointments for this day.'));
+    list.forEach(a=>{
+      const {clientName, petName, serviceName, employeeName} = a;
+      wrap.appendChild(
+        el('button',{class:'text-left rounded-xl2 border border-zinc-200 p-3 bg-white shadow-card hover:bg-zinc-50',
+                     onclick:()=>goto('appt', a.id)},
+          el('div',{class:'font-semibold'},`${clientName} – ${petName}`),
+          el('div',{class:'text-xs text-zinc-500'},serviceName),
+          el('div',{class:'text-sm'},`${fmtTime(a.start)} – ${fmtTime(a.end)} • ${employeeName}`),
+          el('span',{class:'inline-block text-xs mt-1 px-2 py-0.5 rounded-full border'},a.status)
+        )
+      );
+    });
+    return wrap;
+  }
+
+  function buildWeek(){
+    const start = startOfWeek(state.focus);
+    const days = [...Array(7)].map((_,i)=>addDays(start,i));
+    const head = el('div',{class:'grid grid-cols-7 text-sm font-semibold mb-2'},
+      ...days.map(d=>el('div',{class:'text-center'}, d.toLocaleDateString([], {weekday:'short'})+'\n'+d.getDate()))
+    );
+    const grid = el('div',{class:'grid grid-cols-7 gap-2'});
+    days.forEach(d=>{
+      const iso = toISODate(d);
+      const appts = apptsForDateISO(iso);
+      const col = el('div',{class:'rounded-xl border border-zinc-200 bg-white p-2 min-h-[110px] shadow-sm'});
+      if (!appts.length) col.appendChild(el('div',{class:'text-xs text-zinc-400 text-center mt-6'},'—'));
+      appts.forEach(a=>{
+        col.appendChild(el('button',{class:'block w-full text-left text-xs rounded-lg border px-2 py-1 mb-1 bg-brand-50 border-brand-200 hover:bg-brand-100',
+                      onclick:()=>goto('appt',a.id)}, `${fmtTime(a.start)} • ${a.petName}`));
+      });
+      grid.appendChild(col);
+    });
+    return el('div',{}, head, grid);
+  }
+
+  function buildMonth(){
+    const f = state.focus; const y=f.getFullYear(), m=f.getMonth();
+    const first = new Date(y,m,1); const start = startOfWeek(first);
+    const cells = [...Array(42)].map((_,i)=>addDays(start,i)); // 6 rows
+    const head = el('div',{class:'grid grid-cols-7 text-xs font-semibold text-zinc-500 mb-1'},
+      ...['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=>el('div',{class:'text-center'},d))
+    );
+    const grid = el('div',{class:'grid grid-cols-7 gap-1'});
+    cells.forEach(d=>{
+      const inMonth = d.getMonth()===m; const iso = toISODate(d);
+      const appts = apptsForDateISO(iso);
+      grid.appendChild(
+        el('button',{class:`text-left rounded-lg p-2 border hit tap anim
+                           ${inMonth?'bg-white border-zinc-200':'bg-zinc-50 border-zinc-200 opacity-60'} hover:bg-zinc-50`,
+                     onclick:()=>{ state.focus=d; state.view='day'; rebuild(); }},
+          el('div',{class:'flex justify-between items-center mb-1'},
+            el('span',{class:'text-xs text-zinc-500'}, d.getDate()),
+            appts.length ? el('span',{class:'text-[10px] rounded-full px-1.5 py-0.5 bg-brand-600 text-white'}, appts.length) : ''
+          )
+        )
+      );
+    });
+    return el('div',{}, head, grid);
+  }
+
+  function rebuild(){
+    toolbar.innerHTML='';
+    toolbar.appendChild(prevBtn);
+    toolbar.appendChild(nextBtn);
+    toolbar.appendChild(todayBtn);
+    toolbar.appendChild(el('span',{class:'mx-2 font-semibold'}, headerLabel()));
+    toolbar.appendChild(el('span',{class:'flex-1'}));
+    toolbar.appendChild(toggle);
+
+    content.innerHTML='';
+    if (state.view==='day')   content.appendChild(buildDay());
+    if (state.view==='week')  content.appendChild(buildWeek());
+    if (state.view==='month') content.appendChild(buildMonth());
+  }
+
+  // initial paint + try to load live data
+  rebuild();
+  root.appendChild(title); root.appendChild(crumbs); root.appendChild(toolbar); root.appendChild(content);
+  maybeLoad();
+  return root;
+}
+    
 /* ===== appointment detail ===== */
 function AppointmentDetail(id){
   const a = getAppt(id);
