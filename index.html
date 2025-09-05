@@ -348,17 +348,7 @@ function Calendar(){
     return f.toLocaleDateString([], {month:'long', year:'numeric'});
   }
 
-  // normalize any row from Supabase to what UI expects
-  const normalize = (r) => ({
-    id: r.id,
-    start: r.start, // ISO string
-    end:   r.end   || r.start, // tolerate missing end
-    status: r.status || 'booked',
-    clientName: r.client_name || r.client || r.customer || 'Client',
-    petName:    r.pet_name    || r.pet    || 'Pet',
-    serviceName:r.service_name|| r.service|| 'Service',
-    employeeName:r.employee_name|| r.employee|| 'Stylist'
-  });
+
 
   function apptsForDateISO(isoDate){
     // prefer live data; else fall back to local seeded data
