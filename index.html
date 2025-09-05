@@ -75,26 +75,22 @@ const supa = (window.supabase && SUPABASE_URL && SUPABASE_ANON_KEY)
   ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
   : null;
 
-// helper: fetch appointments within a date range (inclusive)
-async function fetchAppointmentsRange(startISODate, endISODate) {
-  if (!supa) return null; // SDK not loaded or keys missing
-  try {
-    // Adjust table/columns if your schema is different.
-    // Expecting columns at least: id, start, end, status, (optional) client_name, pet_name, service_name, employee_name
-    const { data, error } = await supa
-      .from('appointments')
-      .select('*')
-      .gte('start', startISODate + 'T00:00:00.000Z')
-      .lte('start', endISODate   + 'T23:59:59.999Z')
-      .order('start', { ascending: true });
-
-    if (error) throw error;
-    return data || [];
-  } catch (e) {
-    console.warn('Supabase fetch failed; falling back to local data.', e);
-    return null;
-  }
-}
+// normalize any row from Supabase to what UI expects
+const normalize = (r) => {
+  const time = (r.when_time || '09:00').padStart(5, '0'); // HH:MM
+  const startISO = `${r.when_date}T${time}:00`;
+  return {
+    id: r.id,
+    start: startISO,
+    end:   startISO,
+    status: r.status || 'booked',
+    clientName: r.owner_name || r.client_name || 'Client',
+    petName:    r.dog_name   || 'Pet',
+    serviceName:r.service    || r.service_name || 'Service',
+    employeeName: r.employee_name || 'Stylist'
+  };
+};
+    
     const KEY="sb_state_v1";
 const S = JSON.parse(localStorage.getItem(KEY) || "null") || {
   services:[], employees:[], clients:[], pets:[], appointments:[], messages:[], seeded:false
