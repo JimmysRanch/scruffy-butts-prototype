@@ -310,12 +310,17 @@ function Dashboard(){
 }
 
 /* ===== book ===== */
-function Book(){
+
+    function Book(){
   return el('div',{class:'flex-1 p-0'},
     el('iframe',{
-      src:'https://scruffy-butts-pwa-final.vercel.app/book', // redirects to /book
-      class:'w-full', style:'height: calc(100vh - 24px); border: 0;',
-      title:'Scruffy Butts Booking', loading:'eager', referrerpolicy:'no-referrer-when-downgrade', allow:'clipboard-write'
+      src:'https://scruffy-butts-pwa-final.vercel.app/book', // ← keep /book
+      class:'w-full',
+      style:'height: calc(100vh - 24px); border: 0;',
+      title:'Scruffy Butts Booking',
+      loading:'eager',
+      referrerpolicy:'no-referrer-when-downgrade',
+      allow:'clipboard-write'
     })
   );
 }
